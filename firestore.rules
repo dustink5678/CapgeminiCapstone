@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// The website does not talk to Firestore yet. Seed data is written by
+// database/seed.mjs with the project owner's credentials, which bypass rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
