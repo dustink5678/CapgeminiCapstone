@@ -1,7 +1,8 @@
 rules_version = '2';
 
-// The website does not talk to Firestore yet. Seed data is written by
-// database/seed.mjs with the project owner's credentials, which bypass rules.
+// Clients never talk to Firestore directly. The SPA calls Cloud Functions,
+// which use the Admin SDK (bypasses rules). Seed data is written by
+// database/seed.mjs with the project owner's credentials.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {

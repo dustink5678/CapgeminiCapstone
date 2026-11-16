@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { fetchJson, money } from "./api";
+import { apiMode, fetchJson, money } from "./api";
 import Spark from "./components/Spark";
 import { CartIcon, ChevronDown, HeartIcon, PersonIcon, SearchIcon, StoreIcon } from "./components/Icons";
-import Shop from "./pages/Shop";
+import Shop, { clearAutoPersonalizeGuard } from "./pages/Shop";
 import CartPage from "./pages/CartPage";
 import DataLayer from "./pages/DataLayer";
 import Dashboard from "./pages/Dashboard";
+import {
+  checkoutDemoSession,
+  endDemoSession,
+  ensureDemoSession,
+  installSessionEndOnLeave,
+  queueEvent,
+} from "./session";
 
 const tabs = [
   { to: "/", label: "Shop", end: true },
@@ -31,6 +38,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [cart, setCart] = useState({ lines: [], count: 0, subtotal: 0 });
   const [resetKey, setResetKey] = useState(0);
+  const [sessionId, setSessionId] = useState(null);
 
   const refreshCart = useCallback(async () => {
     const next = await fetchJson("/api/cart");
@@ -41,30 +49,58 @@ export default function App() {
   useEffect(() => {
     fetchJson("/api/session").then(setSession).catch(() => {});
     refreshCart().catch(() => {});
+    ensureDemoSession()
+      .then(setSessionId)
+      .catch(() => {});
+    return installSessionEndOnLeave();
   }, [refreshCart]);
 
   const add = useCallback(async (productId) => {
     setCart(await fetchJson("/api/cart", { method: "POST", body: JSON.stringify({ productId }) }));
+    queueEvent({ type: "add_to_cart", productId, source: "home", detail: { qty: 1 } });
   }, []);
 
   const setQty = useCallback(async (productId, qty) => {
     setCart(await fetchJson(`/api/cart/${productId}`, { method: "PATCH", body: JSON.stringify({ qty }) }));
+    queueEvent({
+      type: qty <= 0 ? "remove_from_cart" : "add_to_cart",
+      productId,
+      source: "cart",
+      detail: { qty },
+    });
   }, []);
 
   async function resetDemo() {
+    await endDemoSession();
     await fetchJson("/api/demo/reset", { method: "POST" });
+    clearAutoPersonalizeGuard();
+    const nextSession = await ensureDemoSession();
+    setSessionId(nextSession);
     await refreshCart();
     setResetKey((key) => key + 1);
   }
 
+  const handleCheckout = useCallback(async () => {
+    const result = await checkoutDemoSession();
+    if (result?.cart) setCart(result.cart);
+    else await refreshCart();
+    clearAutoPersonalizeGuard();
+    const nextSession = await ensureDemoSession();
+    setSessionId(nextSession);
+    return result;
+  }, [refreshCart]);
+
   const isCustomer = location.pathname === "/" || location.pathname === "/cart";
-  const cartApi = { cart, add, setQty };
+  const cartApi = { cart, add, setQty, sessionId, onCheckout: handleCheckout };
 
   return (
     <div className={isCustomer ? "app customer" : "app associate"}>
       <div className="demo-bar">
         <div className="demo-inner">
-          <span className="demo-label">Spark Agent prototype</span>
+          <span className="demo-label">
+            Spark Agent prototype
+            <span className="demo-mode"> · API {apiMode}</span>
+          </span>
           <nav className="demo-tabs" aria-label="Prototype sections">
             {tabs.map((tab) => (
               <NavLink key={tab.to} to={tab.to} end={tab.end} className="demo-tab">

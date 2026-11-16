@@ -25,16 +25,83 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
+  const [agentStatus, setAgentStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [market, setMarket] = useState(null);
+  const [marketStatus, setMarketStatus] = useState("");
+  const [marketBusy, setMarketBusy] = useState(false);
   const orderRef = useRef(null);
 
+  async function loadInsights() {
+    const [insights, draft, context] = await Promise.all([
+      fetchJson("/api/insights"),
+      fetchJson("/api/store-order"),
+      fetchJson("/api/market-context?storeId=4127").catch(() => null),
+    ]);
+    setData(insights);
+    setOrder(draft);
+    setMarket(context);
+  }
+
+  async function refreshMarket(event) {
+    // One run per active region (not per store or shopper). Shift-click forces past the 6h cache.
+    const force = Boolean(event?.shiftKey);
+    setMarketBusy(true);
+    setMarketStatus(force ? "Force-refreshing every region…" : "Refreshing market context for every region…");
+    try {
+      const result = await fetchJson("/api/agents/market-context", {
+        method: "POST",
+        body: JSON.stringify({ force }),
+      });
+      await loadInsights();
+      const ran = (result.regions || []).filter((r) => !r.skipped && !r.error);
+      const skipped = (result.regions || []).filter((r) => r.skipped);
+      const failed = (result.regions || []).filter((r) => r.error);
+      setMarketStatus(
+        [
+          ran.length && `${ran.length} region${ran.length === 1 ? "" : "s"} updated`,
+          skipped.length && `${skipped.length} still fresh`,
+          failed.length && `${failed.length} failed`,
+          `news: ${result.national?.status || "unknown"}`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      );
+    } catch (err) {
+      setMarketStatus(err.message);
+    } finally {
+      setMarketBusy(false);
+    }
+  }
+
   useEffect(() => {
-    Promise.all([fetchJson("/api/insights"), fetchJson("/api/store-order")])
-      .then(([insights, draft]) => {
-        setData(insights);
-        setOrder(draft);
-      })
-      .catch((err) => setError(err.message));
+    // Read-only on load — never auto-run replenishment (avoids Gemini spend on every visit).
+    loadInsights().catch((err) => setError(err.message));
   }, []);
+
+  async function regenerateDraft(event) {
+    // Default: force=false so same-event drafts skip Gemini. Shift-click forces a full regen.
+    const force = Boolean(event?.shiftKey);
+    setBusy(true);
+    setAgentStatus(force ? "Force-regenerating draft…" : "Running replenishment agent…");
+    try {
+      const result = await fetchJson("/api/agents/replenish", {
+        method: "POST",
+        body: JSON.stringify({ force }),
+      });
+      await loadInsights();
+      if (result.skipped) setAgentStatus(`Skipped (${result.reason})`);
+      else if (result.usedGemini || result.mode === "mock") {
+        setAgentStatus(result.mode === "mock" ? "Draft regenerated (mock model)" : "Draft regenerated with Gemini");
+      } else {
+        setAgentStatus("Draft regenerated (fallback notes)");
+      }
+    } catch (err) {
+      setAgentStatus(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (error) return <main className="wm-page assoc-page"><p className="notice error">{error}</p></main>;
   if (!data || !order) return <main className="wm-page assoc-page"><p className="empty">Loading store insights…</p></main>;
@@ -42,10 +109,21 @@ export default function Dashboard() {
   return (
     <main className="wm-page assoc-page">
       <div className="page-head">
-        <h1>Store insights</h1>
-        <p>
-          {data.storeNo} · {data.store} · Updated {data.updated}
-        </p>
+        <div>
+          <h1>Store insights</h1>
+          <p>
+            {data.storeNo} · {data.store} · Updated {data.updated}
+          </p>
+          {agentStatus && <p className="muted agent-status">{agentStatus}</p>}
+        </div>
+        <button
+          className="pill-btn"
+          disabled={busy}
+          onClick={regenerateDraft}
+          title="Click to regenerate if needed. Hold Shift to force a full Gemini/mock run."
+        >
+          {busy ? "Working…" : "Regenerate draft order"}
+        </button>
       </div>
 
       <section className="alert">
@@ -59,6 +137,13 @@ export default function Dashboard() {
           Review drafted order
         </button>
       </section>
+
+      <MarketContext
+        market={market}
+        status={marketStatus}
+        busy={marketBusy}
+        onRefresh={refreshMarket}
+      />
 
       <div className="kpis">
         {data.kpis.map((kpi) => (
@@ -146,6 +231,90 @@ export default function Dashboard() {
   );
 }
 
+const NEWS_STATUS = {
+  live: "Live GNews headlines",
+  cached: "Cached GNews headlines",
+  no_key: "Calendar only (no GNews key)",
+  error: "GNews unavailable, calendar only",
+};
+
+function MarketContext({ market, status, busy, onRefresh }) {
+  const regions = market?.regions || [];
+  return (
+    <section className="card market">
+      <div className="card-head">
+        <div>
+          <h2>Market context by region</h2>
+          <p className="muted">
+            {market?.org?.name || "Walmart"} · {regions.length} active region{regions.length === 1 ? "" : "s"} · One news and
+            calendar check per region, shared by every store in it
+          </p>
+          {status && <p className="muted agent-status">{status}</p>}
+        </div>
+        <button
+          className="pill-btn"
+          disabled={busy}
+          onClick={onRefresh}
+          title="Runs once per active region. Hold Shift to force past the 6-hour cache."
+        >
+          {busy ? "Working…" : "Refresh market context"}
+        </button>
+      </div>
+      <div className="market-grid">
+        {regions.map((region) => {
+          const brief = region.marketBrief;
+          const isHome = region.id === market?.storeRegion?.id;
+          return (
+            <article key={region.id} className={isHome ? "region-card home" : "region-card"}>
+              <p className="region-name">
+                {region.name}
+                {isHome && <span className="region-home">This store</span>}
+              </p>
+              <p className="muted">Stores {region.storeIds.join(", ")}</p>
+              {brief ? (
+                <>
+                  <h3>{brief.headline}</h3>
+                  {brief.summary && <p>{brief.summary}</p>}
+                  <div className="chips">
+                    {(brief.calendar || []).map((c) => (
+                      <span key={c.key} className="chip holiday">
+                        {c.label} · {c.daysUntil === 0 ? "today" : `${c.daysUntil}d`}
+                      </span>
+                    ))}
+                    {(brief.windows || []).map((label) => (
+                      <span key={label} className="chip">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                  {brief.articles?.length > 0 && (
+                    <ul className="headlines">
+                      {brief.articles.slice(0, 3).map((article) => (
+                        <li key={article.url}>
+                          <a href={article.url} target="_blank" rel="noreferrer">
+                            {article.title}
+                          </a>{" "}
+                          <span className="muted">{article.source}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="muted small">
+                    {NEWS_STATUS[brief.newsStatus] || brief.newsStatus} · {brief.mode === "live" ? "Gemini" : brief.mode} ·{" "}
+                    {brief.eventIds?.length || 0} events · as of {brief.asOf}
+                  </p>
+                </>
+              ) : (
+                <p className="empty">No brief yet. Refresh market context to run this region once.</p>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function DraftOrder({ order, onChange }) {
   const [editing, setEditing] = useState(false);
   const [qty, setQty] = useState(() => Object.fromEntries(order.lines.map((line) => [line.id, line.qty])));
@@ -209,8 +378,11 @@ function DraftOrder({ order, onChange }) {
               <tr key={line.id}>
                 <td>
                   <span className="order-item">
-                    <img src={`/products/${line.id}.jpg`} alt="" />
-                    {line.item}
+                    <img src={line.image || `/products/${line.id}.jpg`} alt="" />
+                    <span>
+                      {line.item}
+                      {line.driver && <span className="line-driver">{line.driver}</span>}
+                    </span>
                   </span>
                 </td>
                 <td className="num">{line.onHand.toLocaleString()}</td>

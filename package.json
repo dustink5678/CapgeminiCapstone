@@ -8,8 +8,14 @@
     "preview": "vite preview --port 4173",
     "seed": "node database/seed.mjs",
     "seed:dry": "node database/seed.mjs --dry-run",
-    "deploy": "vite build && firebase deploy --only hosting"
+    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node database/seed-emulator.mjs",
+    "simulate": "node scripts/simulate-agent-flow.mjs",
+    "deploy": "vite build && firebase deploy --only hosting,functions",
+    "deploy:hosting": "vite build && firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions",
+    "emulators": "firebase emulators:start --only functions,firestore"
   },
+
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

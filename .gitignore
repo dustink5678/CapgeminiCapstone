@@ -8,6 +8,14 @@ dist/
 .env
 .env.*
 !.env.example
+functions/.env
+functions/.env.*
+!functions/.env.example
+functions/.secret.local
+firestore-debug.log
+ui-debug.log
+firebase-debug.log
+*.log
 
 # Firebase local cache
 .firebase/

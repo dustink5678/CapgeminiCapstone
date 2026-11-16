@@ -30,6 +30,122 @@ const catalog = [
   { id: "towels", name: "Bounty Select-A-Size Paper Towels, 6 Triple Plus Rolls", price: 19.97, unitPrice: "$3.33/roll", aisle: "Household", shelf: "storm", source: opf("0030772167748") },
 ].map((item) => ({ ...item, image: `/products/${item.id}.jpg` }));
 
+// Tags drive holiday / seasonal / news matching in the market-context and personalize agents.
+const baseTags = {
+  milk: ["dairy", "breakfast", "storm", "thanksgiving", "baking"],
+  eggs: ["dairy", "breakfast", "storm", "baking", "easter", "thanksgiving", "christmas"],
+  water: ["storm", "beverages", "heat_wave", "summer"],
+  bread: ["bakery", "storm", "back_to_school"],
+  batteries: ["storm", "christmas"],
+  flashlight: ["storm", "halloween"],
+  soup: ["storm", "cold_flu", "winter", "pantry"],
+  crackers: ["storm", "cold_flu", "pantry", "snacks"],
+  cocoa: ["storm", "winter", "christmas", "beverages"],
+  beans: ["storm", "bbq", "july4", "pantry"],
+  ramen: ["storm", "back_to_school", "pantry"],
+  pb: ["pantry", "back_to_school", "storm"],
+  coffee: ["breakfast", "beverages"],
+  butter: ["dairy", "baking", "thanksgiving", "christmas"],
+  bacon: ["breakfast", "meat"],
+  oj: ["breakfast", "beverages", "cold_flu"],
+  cereal: ["breakfast", "back_to_school"],
+  pasta: ["pantry"],
+  bananas: ["produce", "breakfast"],
+  apples: ["produce", "produce_seasonal", "fall", "back_to_school", "halloween"],
+  towels: ["storm", "household", "thanksgiving"],
+};
+
+const PLACEHOLDER = "/products/placeholder.svg";
+
+// Wider org-level catalog for testing holiday, seasonal, game-day, and regional logic.
+const extendedCatalog = [
+  // Baby / everyday
+  { id: "formula", name: "Parent's Choice Infant Formula, 35 oz", price: 24.97, unitPrice: "71.3 ¢/oz", aisle: "Baby", shelf: "staples", tags: ["baby", "storm"] },
+  { id: "diapers", name: "Parent's Choice Diapers, Size 2, 104 Count", price: 19.97, unitPrice: "19.2 ¢/each", aisle: "Baby", shelf: "staples", tags: ["baby", "storm"] },
+  { id: "spinach", name: "Marketside Organic Baby Spinach, 10 oz", price: 3.98, unitPrice: "39.8 ¢/oz", aisle: "Produce", shelf: "staples", tags: ["produce"] },
+  { id: "sportsdrink", name: "Great Value Sports Drink, Fruit Punch, 12 Pack", price: 6.48, unitPrice: "2.7 ¢/fl oz", aisle: "Beverages", shelf: "staples", tags: ["beverages", "heat_wave", "game_day", "storm", "cold_flu", "summer"] },
+  { id: "rice", name: "Great Value Long Grain Enriched Rice, 5 lb", price: 3.42, unitPrice: "4.3 ¢/oz", aisle: "Pantry", shelf: "staples", tags: ["pantry", "storm", "hispanic_pantry"] },
+  { id: "oatmeal", name: "Quaker Old Fashioned Oats, 42 oz", price: 5.48, unitPrice: "13 ¢/oz", aisle: "Breakfast", shelf: "staples", tags: ["breakfast", "winter", "cold_flu"] },
+  { id: "chicken_broth", name: "Swanson Chicken Broth, 32 oz", price: 2.48, unitPrice: "7.8 ¢/oz", aisle: "Pantry", shelf: "staples", tags: ["pantry", "cold_flu", "thanksgiving", "winter"] },
+  { id: "tuna", name: "StarKist Chunk Light Tuna in Water, 4 Pack", price: 4.98, unitPrice: "31.1 ¢/oz", aisle: "Pantry", shelf: "storm", tags: ["storm", "pantry"] },
+  { id: "propane", name: "Coleman Propane Camping Cylinder, 16 oz, 2 Pack", price: 9.97, aisle: "Outdoor", shelf: "storm", tags: ["storm", "bbq"] },
+  { id: "ice", name: "Bagged Ice, 10 lb", price: 2.98, aisle: "Frozen", shelf: "storm", tags: ["storm", "summer", "heat_wave", "july4", "bbq"] },
+
+  // Cold & flu
+  { id: "cough_drops", name: "Halls Honey Lemon Cough Drops, 80 Count", price: 3.97, aisle: "Health", shelf: "seasonal", tags: ["cold_flu", "winter"] },
+  { id: "tissues", name: "Kleenex Ultra Soft Facial Tissues, 3 Boxes", price: 5.97, aisle: "Household", shelf: "seasonal", tags: ["cold_flu", "winter", "household"] },
+
+  // Thanksgiving / fall
+  { id: "turkey", name: "Butterball Frozen Whole Turkey, 12–14 lb", price: 17.88, unitPrice: "$1.38/lb", aisle: "Meat", shelf: "seasonal", tags: ["thanksgiving", "christmas", "meat"] },
+  { id: "stuffing", name: "Stove Top Stuffing Mix for Turkey, 6 oz", price: 1.98, unitPrice: "33 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["thanksgiving", "christmas", "pantry"] },
+  { id: "cranberry", name: "Ocean Spray Jellied Cranberry Sauce, 14 oz", price: 1.78, unitPrice: "12.7 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["thanksgiving", "christmas"] },
+  { id: "pumpkin_puree", name: "Libby's 100% Pure Pumpkin, 15 oz", price: 2.28, unitPrice: "15.2 ¢/oz", aisle: "Baking", shelf: "seasonal", tags: ["thanksgiving", "baking", "fall"] },
+  { id: "pie_crust", name: "Pillsbury Refrigerated Pie Crusts, 2 Count", price: 3.48, aisle: "Bakery", shelf: "seasonal", tags: ["thanksgiving", "christmas", "baking"] },
+  { id: "sweet_potatoes", name: "Fresh Sweet Potatoes, 3 lb Bag", price: 3.47, unitPrice: "$1.16/lb", aisle: "Produce", shelf: "seasonal", tags: ["thanksgiving", "produce_seasonal", "fall", "produce"] },
+  { id: "green_beans", name: "Great Value Cut Green Beans, 14.5 oz", price: 0.78, unitPrice: "5.4 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["thanksgiving", "christmas", "pantry"] },
+  { id: "cream_mushroom", name: "Campbell's Condensed Cream of Mushroom Soup, 10.5 oz", price: 1.38, unitPrice: "13.1 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["thanksgiving", "pantry"] },
+  { id: "whipped_topping", name: "Cool Whip Original Whipped Topping, 8 oz", price: 2.48, aisle: "Frozen", shelf: "seasonal", tags: ["thanksgiving", "christmas", "july4"] },
+  { id: "dinner_rolls", name: "Great Value Brown 'N Serve Dinner Rolls, 12 Count", price: 2.12, aisle: "Bakery", shelf: "seasonal", tags: ["thanksgiving", "christmas", "easter", "bakery"] },
+  { id: "apple_cider", name: "Martinelli's Sparkling Apple Cider, 25.4 fl oz", price: 3.48, aisle: "Beverages", shelf: "seasonal", tags: ["thanksgiving", "christmas", "new_years", "fall", "beverages"] },
+  { id: "carving_pumpkin", name: "Fresh Carving Pumpkin, Each", price: 4.98, aisle: "Produce", shelf: "seasonal", tags: ["halloween", "fall", "produce_seasonal"] },
+  { id: "halloween_candy", name: "Hershey's Assorted Chocolate Snack Size, Halloween Bag, 100 Count", price: 19.98, aisle: "Snacks", shelf: "seasonal", tags: ["halloween", "snacks"] },
+
+  // Christmas / winter baking
+  { id: "flour", name: "Great Value All Purpose Flour, 5 lb", price: 2.38, unitPrice: "3 ¢/oz", aisle: "Baking", shelf: "seasonal", tags: ["baking", "christmas", "thanksgiving"] },
+  { id: "sugar", name: "Great Value Pure Granulated Sugar, 4 lb", price: 3.24, unitPrice: "5.1 ¢/oz", aisle: "Baking", shelf: "seasonal", tags: ["baking", "christmas", "thanksgiving"] },
+  { id: "choc_chips", name: "Nestle Toll House Semi-Sweet Morsels, 12 oz", price: 3.98, unitPrice: "33.2 ¢/oz", aisle: "Baking", shelf: "seasonal", tags: ["baking", "christmas", "valentines"] },
+  { id: "ham", name: "Smithfield Spiral Sliced Honey Ham, ~8 lb", price: 24.97, unitPrice: "$3.12/lb", aisle: "Meat", shelf: "seasonal", tags: ["christmas", "easter", "meat"] },
+  { id: "eggnog", name: "Great Value Eggnog, 0.5 Gallon", price: 3.98, aisle: "Dairy", shelf: "seasonal", tags: ["christmas", "winter", "dairy"] },
+  { id: "candy_canes", name: "Brach's Peppermint Candy Canes, 12 Count", price: 1.97, aisle: "Snacks", shelf: "seasonal", tags: ["christmas", "snacks"] },
+
+  // New Year's (Southern tradition)
+  { id: "black_eyed_peas", name: "Bush's Black Eyed Peas, 15.8 oz", price: 1.18, unitPrice: "7.5 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["new_years", "pantry"] },
+  { id: "collards", name: "Fresh Collard Greens, Bunch", price: 1.98, aisle: "Produce", shelf: "seasonal", tags: ["new_years", "thanksgiving", "produce_seasonal", "produce"] },
+
+  // Game day / Super Bowl
+  { id: "chips", name: "Lay's Classic Potato Chips, Party Size, 13 oz", price: 4.98, unitPrice: "38.3 ¢/oz", aisle: "Snacks", shelf: "seasonal", tags: ["superbowl", "game_day", "july4", "snacks", "bbq"] },
+  { id: "salsa", name: "Tostitos Chunky Salsa, Medium, 24 oz", price: 4.28, unitPrice: "17.8 ¢/oz", aisle: "Snacks", shelf: "seasonal", tags: ["superbowl", "game_day", "cinco_de_mayo", "hispanic_pantry"] },
+  { id: "tortilla_chips", name: "Tostitos Scoops! Tortilla Chips, 10 oz", price: 4.48, unitPrice: "44.8 ¢/oz", aisle: "Snacks", shelf: "seasonal", tags: ["superbowl", "game_day", "cinco_de_mayo", "snacks"] },
+  { id: "queso", name: "Tostitos Salsa Con Queso, 15 oz", price: 4.28, aisle: "Snacks", shelf: "seasonal", tags: ["superbowl", "game_day"] },
+  { id: "wings", name: "Tyson Frozen Buffalo Style Chicken Wings, 22 oz", price: 8.97, unitPrice: "40.8 ¢/oz", aisle: "Frozen", shelf: "seasonal", tags: ["superbowl", "game_day", "meat"] },
+  { id: "soda", name: "Coca-Cola Classic, 12 fl oz Cans, 12 Pack", price: 7.48, unitPrice: "5.2 ¢/fl oz", aisle: "Beverages", shelf: "seasonal", tags: ["superbowl", "game_day", "july4", "bbq", "beverages", "summer"] },
+  { id: "paper_plates", name: "Great Value Everyday Paper Plates, 150 Count", price: 6.97, aisle: "Household", shelf: "seasonal", tags: ["bbq", "july4", "superbowl", "game_day", "thanksgiving", "household"] },
+
+  // Summer / BBQ / July 4 / Memorial & Labor Day
+  { id: "hot_dogs", name: "Ball Park Beef Franks, 8 Count", price: 4.98, aisle: "Meat", shelf: "seasonal", tags: ["july4", "bbq", "memorial_day", "labor_day", "summer", "meat"] },
+  { id: "hot_dog_buns", name: "Great Value Hot Dog Buns, 8 Count", price: 1.24, aisle: "Bakery", shelf: "seasonal", tags: ["july4", "bbq", "memorial_day", "labor_day", "bakery"] },
+  { id: "ground_beef", name: "80% Lean / 20% Fat Ground Beef, 2 lb Roll", price: 10.48, unitPrice: "$5.24/lb", aisle: "Meat", shelf: "seasonal", tags: ["july4", "bbq", "memorial_day", "labor_day", "superbowl", "meat"] },
+  { id: "hamburger_buns", name: "Great Value Hamburger Buns, 8 Count", price: 1.24, aisle: "Bakery", shelf: "seasonal", tags: ["july4", "bbq", "memorial_day", "labor_day", "bakery"] },
+  { id: "charcoal", name: "Kingsford Original Charcoal Briquettes, 16 lb", price: 12.48, aisle: "Outdoor", shelf: "seasonal", tags: ["bbq", "july4", "memorial_day", "labor_day", "summer"] },
+  { id: "bbq_sauce", name: "Sweet Baby Ray's Original Barbecue Sauce, 28 oz", price: 2.98, unitPrice: "10.6 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["bbq", "july4", "memorial_day", "labor_day", "superbowl"] },
+  { id: "watermelon", name: "Fresh Seedless Watermelon, Each", price: 5.48, aisle: "Produce", shelf: "seasonal", tags: ["july4", "summer", "produce_seasonal", "bbq", "produce"] },
+  { id: "corn", name: "Fresh Sweet Corn on the Cob, Each", price: 0.5, aisle: "Produce", shelf: "seasonal", tags: ["summer", "july4", "produce_seasonal", "bbq", "produce"] },
+  { id: "sunscreen", name: "Banana Boat Sport Ultra SPF 50 Sunscreen Lotion, 8 oz", price: 8.97, aisle: "Health", shelf: "seasonal", tags: ["summer", "heat_wave"] },
+
+  // Back to school
+  { id: "juice_boxes", name: "Capri Sun Pacific Cooler Juice Drink, 10 Count", price: 3.98, aisle: "Beverages", shelf: "seasonal", tags: ["back_to_school", "snacks", "beverages"] },
+  { id: "granola_bars", name: "Nature Valley Crunchy Oats 'n Honey Granola Bars, 12 Count", price: 3.48, aisle: "Snacks", shelf: "seasonal", tags: ["back_to_school", "breakfast", "snacks"] },
+  { id: "lunchables", name: "Lunchables Turkey & Cheddar Cracker Stackers, 3.2 oz", price: 1.98, aisle: "Deli", shelf: "seasonal", tags: ["back_to_school"] },
+  { id: "crayons", name: "Crayola Crayons, 24 Count", price: 0.5, aisle: "School Supplies", shelf: "seasonal", tags: ["back_to_school"] },
+
+  // Valentine's / Easter / St. Patrick's / Cinco de Mayo
+  { id: "valentines_chocolate", name: "Russell Stover Assorted Chocolates Heart Box, 7 oz", price: 6.98, aisle: "Snacks", shelf: "seasonal", tags: ["valentines", "snacks"] },
+  { id: "strawberries", name: "Fresh Strawberries, 1 lb", price: 2.97, aisle: "Produce", shelf: "seasonal", tags: ["valentines", "spring", "produce_seasonal", "july4", "produce"] },
+  { id: "egg_dye", name: "PAAS Classic Easter Egg Dye Kit", price: 3.97, aisle: "Seasonal", shelf: "seasonal", tags: ["easter"] },
+  { id: "jelly_beans", name: "Brach's Classic Jelly Beans, 14.5 oz", price: 2.98, aisle: "Snacks", shelf: "seasonal", tags: ["easter", "snacks"] },
+  { id: "corned_beef", name: "Corned Beef Brisket, Point Cut, ~3 lb", price: 15.97, unitPrice: "$5.32/lb", aisle: "Meat", shelf: "seasonal", tags: ["st_patricks", "meat"] },
+  { id: "cabbage", name: "Fresh Green Cabbage, Each", price: 2.48, aisle: "Produce", shelf: "seasonal", tags: ["st_patricks", "produce_seasonal", "produce"] },
+  { id: "tortillas", name: "Mission Flour Tortillas, Soft Taco, 10 Count", price: 3.28, aisle: "Bakery", shelf: "seasonal", tags: ["cinco_de_mayo", "hispanic_pantry", "bakery"] },
+  { id: "avocados", name: "Fresh Hass Avocados, 4 Count Bag", price: 3.98, aisle: "Produce", shelf: "seasonal", tags: ["cinco_de_mayo", "superbowl", "produce_seasonal", "produce"] },
+  { id: "limes", name: "Fresh Limes, 2 lb Bag", price: 2.98, aisle: "Produce", shelf: "seasonal", tags: ["cinco_de_mayo", "summer", "produce"] },
+  { id: "black_beans", name: "Goya Black Beans, 15.5 oz", price: 1.28, unitPrice: "8.3 ¢/oz", aisle: "Pantry", shelf: "seasonal", tags: ["hispanic_pantry", "cinco_de_mayo", "pantry"] },
+].map((item) => ({ ...item, image: PLACEHOLDER }));
+
+catalog.forEach((item) => {
+  item.tags = baseTags[item.id] || [];
+});
+catalog.push(...extendedCatalog);
+
 const recommendations = {
   milk: {
     rank: 1,
@@ -477,6 +593,68 @@ function getSession() {
   return { first: doug.first, name: doug.name, store: doug.store, city: doug.city, tier: doug.tier };
 }
 
+// Offline stand-in for the region briefs; the live API builds these from GNews + calendar.
+function getMarketContext() {
+  const demoBrief = (summary) => ({
+    headline: "Seasonal and holiday picks",
+    summary,
+    activeTags: [],
+    calendar: [],
+    windows: ["Demo data"],
+    articles: [],
+    eventIds: [],
+    newsStatus: "no_key",
+    mode: "demo",
+    asOf: new Date().toISOString().slice(0, 10),
+  });
+  const regions = [
+    { id: "sc_richland", name: "Columbia / Richland County, SC", storeIds: ["4127", "4128", "2210"], marketBrief: demoBrief("Demo mode. Run the live API to pull GNews headlines and calendar signals for this region.") },
+    { id: "sc_lexington", name: "Irmo / Lexington County, SC", storeIds: ["3302"], marketBrief: demoBrief("Demo mode. Run the live API to pull GNews headlines and calendar signals for this region.") },
+  ];
+  return { org: { id: "walmart", name: "Walmart", nationalNews: { fetchedAt: null, count: 0 } }, regions, storeRegion: regions[0] };
+}
+
+function checkout({ sessionId } = {}) {
+  const current = getCart();
+  if (!current.count) return { error: "Cart is empty" };
+  const tax = round(current.subtotal * 0.08);
+  const total = round(current.subtotal + tax);
+  const orderId = `ord_demo_${Date.now().toString(36)}`;
+  const order = {
+    id: orderId,
+    status: "picked_up",
+    subtotal: current.subtotal,
+    savings: current.savings,
+    tax,
+    total,
+    itemCount: current.count,
+    fulfillment: { type: "pickup", window: "Today, 4pm–5pm" },
+    items: current.lines.map((line) => ({
+      productId: line.id,
+      name: line.name,
+      qty: line.qty,
+      unitPrice: line.price,
+    })),
+  };
+  cart = [];
+  return {
+    ok: true,
+    order,
+    cart: getCart(),
+    session: {
+      skipped: true,
+      reason: "demo_mode",
+      summary: {
+        sessionId: sessionId || `demo_${Date.now()}`,
+        outcome: "purchased",
+        orderId,
+        spend: total,
+        headline: `Checked out ${order.items.slice(0, 3).map((item) => item.name).join(", ")}`,
+      },
+    },
+  };
+}
+
 function resetDemo() {
   cart = initialCart();
   storeOrder = initialOrder();
@@ -501,5 +679,7 @@ export {
   getStoreOrder,
   approveStoreOrder,
   resetStoreOrder,
+  getMarketContext,
+  checkout,
   resetDemo,
 };

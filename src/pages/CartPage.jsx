@@ -6,11 +6,12 @@ import { StoreIcon } from "../components/Icons";
 import Price from "../components/Price";
 import Rail from "../components/Rail";
 
-export default function CartPage({ cart, add, setQty }) {
+export default function CartPage({ cart, add, setQty, onCheckout }) {
   const navigate = useNavigate();
   const [bundles, setBundles] = useState([]);
-  const [reserved, setReserved] = useState(false);
   const [error, setError] = useState("");
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [receipt, setReceipt] = useState(null);
 
   const cartKey = cart.lines.map((line) => line.id).join(",");
 
@@ -21,11 +22,26 @@ export default function CartPage({ cart, add, setQty }) {
   }, [cartKey]);
 
   async function changeQty(id, qty) {
-    setReserved(false);
+    setReceipt(null);
     await setQty(id, qty);
   }
 
+  async function handleCheckout() {
+    if (!onCheckout || cart.count === 0 || checkingOut) return;
+    setError("");
+    setCheckingOut(true);
+    try {
+      const result = await onCheckout();
+      setReceipt(result?.order || null);
+    } catch (err) {
+      setError(err.message || "Checkout failed");
+    } finally {
+      setCheckingOut(false);
+    }
+  }
+
   const itemWord = cart.count === 1 ? "item" : "items";
+  const showEmpty = cart.lines.length === 0 && !receipt;
 
   return (
     <main className="wm-page cart-page">
@@ -33,6 +49,13 @@ export default function CartPage({ cart, add, setQty }) {
         Cart <span>({cart.count} {itemWord})</span>
       </h1>
       {error && <p className="notice error">{error}</p>}
+      {receipt && (
+        <p className="notice success">
+          Order {receipt.id} placed for pickup today, 4pm–5pm · {money(receipt.total)} charged (mock).
+          Session ended as purchased — Spark Agent wrote the session summary. A new browse session started
+          automatically.
+        </p>
+      )}
 
       <div className="cart-layout">
         <div className="cart-main">
@@ -47,7 +70,7 @@ export default function CartPage({ cart, add, setQty }) {
               </div>
             </div>
 
-            {cart.lines.length === 0 && (
+            {showEmpty && (
               <div className="cart-empty">
                 <p>Your cart is empty.</p>
                 <button className="pill-btn" onClick={() => navigate("/")}>
@@ -82,6 +105,15 @@ export default function CartPage({ cart, add, setQty }) {
                 </div>
               </article>
             ))}
+
+            {receipt && cart.lines.length === 0 && (
+              <div className="cart-empty">
+                <p>Thanks — your pickup order is confirmed.</p>
+                <button className="pill-btn" onClick={() => navigate("/")}>
+                  Keep shopping
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="card recs">
@@ -112,15 +144,14 @@ export default function CartPage({ cart, add, setQty }) {
 
         <aside className="cart-side">
           <section className="card summary">
-            <button className="checkout-btn" disabled={cart.count === 0} onClick={() => setReserved(true)}>
-              Continue to checkout
+            <button
+              className="checkout-btn"
+              disabled={cart.count === 0 || checkingOut}
+              onClick={handleCheckout}
+            >
+              {checkingOut ? "Placing order…" : "Continue to checkout"}
             </button>
-            {reserved && (
-              <p className="notice success">
-                Pickup reserved for today, 4pm–5pm. In the full build, the agent places the order and saves the finished cart to Doug’s account.
-              </p>
-            )}
-            {cart.savings > 0 && (
+            {cart.savings > 0 && !receipt && (
               <p className="notice info">Items in your cart have reduced prices. Check out now for extra savings!</p>
             )}
             <dl className="sum">
@@ -153,12 +184,12 @@ export default function CartPage({ cart, add, setQty }) {
               </div>
               <div>
                 <dt>Taxes</dt>
-                <dd>Calculated at checkout</dd>
+                <dd>{receipt ? money(receipt.tax) : "Calculated at checkout"}</dd>
               </div>
               <hr />
               <div className="est">
                 <dt>Estimated total</dt>
-                <dd>{money(cart.subtotal)}</dd>
+                <dd>{money(receipt ? receipt.total : cart.subtotal)}</dd>
               </div>
             </dl>
           </section>

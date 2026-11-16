@@ -46,6 +46,8 @@ img { display: block; }
   height: 44px;
 }
 .demo-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.demo-mode { color: var(--muted); font-weight: 400; }
+.agent-status { margin-top: 4px; font-size: 13px; }
 .demo-tabs { display: flex; gap: 4px; height: 100%; }
 .demo-tab {
   display: flex;
@@ -407,7 +409,7 @@ img { display: block; }
 .wplus-mark { color: var(--blue); }
 
 /* Associate pages */
-.page-head { margin-bottom: 18px; }
+.page-head { margin-bottom: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h1 { font-size: 26px; }
 .page-head p { color: var(--text-2); font-size: 15px; margin-top: 4px; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
@@ -507,6 +509,23 @@ img { display: block; }
 .qty-input { width: 90px; text-align: right; padding: 5px 8px; border: 1px solid var(--text-2); border-radius: 4px; }
 .qty-input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
 .order-actions { display: flex; gap: 10px; }
+.line-driver { display: block; font-size: 12px; color: var(--blue); white-space: normal; }
+
+/* Market context */
+.market { margin-bottom: 16px; }
+.market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.region-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.region-card.home { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue); }
+.region-card h3 { font-size: 16px; margin-top: 4px; }
+.region-card p { font-size: 13px; color: var(--text-2); }
+.region-name { font-weight: 700; color: var(--text) !important; display: flex; align-items: center; gap: 8px; }
+.region-home { font-size: 11px; font-weight: 700; color: var(--blue); background: var(--light-blue); border-radius: 999px; padding: 2px 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.chip { font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; color: var(--text-2); }
+.chip.holiday { border-color: var(--yellow); background: #fff8e1; color: var(--text); font-weight: 600; }
+.headlines { margin: 4px 0 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.headlines a { color: var(--blue); }
+.region-card .small { font-size: 12px; margin-top: auto; padding-top: 4px; }
 
 /* Footer */
 .wm-footer { background: var(--light-blue); padding: 24px; text-align: center; font-size: 13px; color: var(--text); }

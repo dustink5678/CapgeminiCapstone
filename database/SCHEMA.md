@@ -7,6 +7,30 @@ The website does not read or write Firestore yet. Everything here is seeded by
 
 ## How the pieces relate
 
+### Org → region → store hierarchy
+
+Walmart is the global root (`orgs/walmart`). Regions group stores that share the
+same local news, weather, and calendar context. Stores keep their own operations
+data (inventory, sales, replenishment drafts). The product catalog is org-global.
+
+The hierarchy is logical: collections stay top-level and link through `orgId` and
+`regionId` fields, so existing queries keep working.
+
+```mermaid
+erDiagram
+  orgs ||--o{ regions : "owns"
+  orgs ||--o{ products : "global catalog"
+  regions ||--o{ stores : "groups"
+  regions ||--o{ localEvents : "market context"
+  regions ||--|| marketBrief : "embedded brief"
+  stores ||--o{ inventory : "stocks"
+```
+
+The market-context agent runs **once per active region** (never per store or per
+shopper) and writes the region's `marketBrief` plus `localEvents` tagged with that
+`regionId`. Personalize, replenish, and session memory only read them, resolving a
+customer's region through `customers.homeStoreId → stores.regionId`.
+
 ```mermaid
 erDiagram
   customers ||--o{ sessions : "logs in and starts"
@@ -127,11 +151,25 @@ Every time the agent shows something, and what happened next. This collection fe
 
 Fields: `customerId`, `sessionId`, `productId`, `surface` (`for_you`, `cart_bundle`), `rank`, `reason`, `signalsUsed[]`, `shownAt`, `clickedAt`, `addedAt`, `outcome` (`added`, `clicked`, `ignored`).
 
+### `orgs/{orgId}`
+The global retailer root. Seeded as `orgs/walmart`.
+
+Fields: `name`, `status` (`active`), `timezone`, `catalogPolicy` (`org_global`), `marketContext` (`{ ttlHours, nationalCountry, nationalLang }`), `nationalNews` (`{ fetchedAt, articles[] }`, a shared cache of US top headlines so every region reuses one GNews call).
+
+### `regions/{regionId}`
+A news and calendar unit that groups nearby stores. Seeded: `sc_richland` (stores 4127, 4128, 2210) and `sc_lexington` (store 3302).
+
+Fields: `orgId`, `name`, `status` (`active` regions are included in org-wide refreshes), `state`, `stateName`, `county`, `cities[]`, `zips[]`, `storeIds[]`, `timezone`, `newsQueries[]` (GNews search strings), `seasonalRisks[]` (e.g. `hurricane`), `marketBrief`.
+
+`marketBrief` (written by the market-context agent): `headline`, `summary`, `activeTags[]`, `calendar[]` (`{ key, label, date, daysUntil, tags[] }`), `articles[]` (`{ title, source, url, publishedAt }`, no article bodies), `eventIds[]`, `asOf`, `dateBucket`, `calendarKeys[]`, `fingerprint`, `newsStatus` (`live`, `cached`, `no_key`, `error`), `mode`, `generatedBy`, `metrics`, `generatedAt`, `fetchedAt`.
+
 ### `products/{productId}`
-Fields: `name`, `brand`, `category`, `aisle`, `price`, `wasPrice`, `unitPrice`, `badge`, `image`, `caseSize`, `imageSource`.
+The org-global catalog.
+
+Fields: `orgId`, `name`, `brand`, `category` (`grocery`, `storm_prep`), `shelf` (`staples`, `storm`, `seasonal`), `tags[]` (`thanksgiving`, `christmas`, `july4`, `superbowl`, `bbq`, `back_to_school`, `baking`, `produce_seasonal`, `cold_flu`, `storm`, …), `aisle`, `price`, `wasPrice`, `unitPrice`, `badge`, `image`, `caseSize`, `imageSource`.
 
 ### `stores/{storeId}`
-Fields: `name`, `type`, `address`, `city`, `state`, `zip`, `county`, `distributionCenter`.
+Fields: `orgId`, `regionId`, `name`, `type`, `address`, `city`, `state`, `zip`, `county`, `distributionCenter`.
 
 - `stores/{storeId}/inventory/{productId}`: `onHand`, `dailyRate`, `daysOfSupply`, `updatedAt`.
 - `stores/{storeId}/dailySales/{yyyy-mm-dd_productId}`: `date`, `productId`, `units`, `revenue`, `baselineUnits`.
@@ -139,7 +177,9 @@ Fields: `name`, `type`, `address`, `city`, `state`, `zip`, `county`, `distributi
 ### `localEvents/{eventId}`
 News, weather, and area-wide social trends. No personal social accounts are stored.
 
-Fields: `type` (`news_alert`, `weather_forecast`, `social_trend`, `school_closure`), `source`, `headline`, `issuedAt`, `validFrom`, `validTo`, `zips[]`, `county`, `severity`, `affectedProductIds[]`, `series[]` (social volume over time), `topTerms` (share of posts by term).
+Fields: `type` (`news_alert`, `weather_forecast`, `social_trend`, `school_closure`, `holiday`, `seasonal`), `source`, `headline`, `issuedAt`, `validFrom`, `validTo`, `orgId`, `regionId`, `regionIds[]` (optional, for events that span regions), `zips[]`, `county`, `severity` (`warning`, `high`, `moderate`, `info`), `affectedProductIds[]`, `series[]` (social volume over time), `topTerms` (share of posts by term).
+
+Events written by the market-context agent also have `source: "market_context"`, `sourceLabel` (e.g. `GNews · The State` or `Calendar`), `label` (short shopper-facing tag such as `Thanksgiving prep`), `tags[]`, `articleUrl`, and `generatedBy`. They are only active between `validFrom` and `validTo`; each region refresh replaces that region's previous market-context events.
 
 ### `storeOrders/{poId}`
 Replenishment orders drafted by the agent for a manager to approve.

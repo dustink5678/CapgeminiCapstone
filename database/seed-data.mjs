@@ -4,49 +4,81 @@ const at = (iso) => new Date(iso);
 const addSec = (date, sec) => new Date(date.getTime() + sec * 1000);
 const round2 = (n) => Math.round(n * 100) / 100;
 
-const extraProducts = [
-  { id: "formula", name: "Parent's Choice Infant Formula, 35 oz", price: 24.97, aisle: "Baby", unitPrice: "71.3 ¢/oz" },
-  { id: "diapers", name: "Parent's Choice Diapers, Size 2, 104 Count", price: 19.97, aisle: "Baby", unitPrice: "19.2 ¢/each" },
-  { id: "spinach", name: "Marketside Organic Baby Spinach, 10 oz", price: 3.98, aisle: "Produce", unitPrice: "39.8 ¢/oz" },
-  { id: "sportsdrink", name: "Great Value Sports Drink, Fruit Punch, 12 Pack", price: 6.48, aisle: "Beverages", unitPrice: "2.7 ¢/fl oz" },
-];
+const ORG_ID = "walmart";
 
-const caseSizes = { milk: 4, eggs: 15, water: 60, bread: 10, batteries: 12 };
+const caseSizes = {
+  milk: 4, eggs: 15, water: 60, bread: 10, batteries: 12, formula: 6, diapers: 4, spinach: 6, sportsdrink: 4,
+  turkey: 4, ham: 6, watermelon: 4, carving_pumpkin: 8, charcoal: 4, ice: 20, paper_plates: 8, soda: 4,
+};
 
-const products = [
-  ...getCatalog().map((item) => ({
-    id: item.id,
-    name: item.name,
-    brand: item.name.split(" ").slice(0, item.name.startsWith("Great Value") ? 2 : 1).join(" "),
-    category: item.shelf === "storm" ? "storm_prep" : "grocery",
-    aisle: item.aisle,
-    price: item.price,
-    wasPrice: item.was ?? null,
-    unitPrice: item.unitPrice ?? null,
-    badge: item.badge ?? null,
-    image: item.image,
-    imageSource: item.source,
-    caseSize: caseSizes[item.id] ?? 12,
-  })),
-  ...extraProducts.map((item) => ({
-    ...item,
-    brand: item.name.split(" ")[0],
-    category: "grocery",
-    wasPrice: null,
-    badge: null,
-    image: null,
-    imageSource: null,
-    caseSize: 6,
-  })),
-];
+const products = getCatalog().map((item) => ({
+  id: item.id,
+  orgId: ORG_ID,
+  name: item.name,
+  brand: item.name.split(" ").slice(0, item.name.startsWith("Great Value") ? 2 : 1).join(" "),
+  category: item.shelf === "storm" ? "storm_prep" : "grocery",
+  shelf: item.shelf,
+  tags: item.tags || [],
+  aisle: item.aisle,
+  price: item.price,
+  wasPrice: item.was ?? null,
+  unitPrice: item.unitPrice ?? null,
+  badge: item.badge ?? null,
+  image: item.image,
+  imageSource: item.source ?? null,
+  caseSize: caseSizes[item.id] ?? 12,
+}));
 const productById = Object.fromEntries(products.map((p) => [p.id, p]));
+
+const org = {
+  id: ORG_ID,
+  name: "Walmart",
+  status: "active",
+  timezone: "America/New_York",
+  catalogPolicy: "org_global",
+  marketContext: { ttlHours: 6, nationalCountry: "us", nationalLang: "en" },
+};
+
+const regions = [
+  {
+    id: "sc_richland",
+    orgId: ORG_ID,
+    name: "Columbia / Richland County, SC",
+    status: "active",
+    state: "SC",
+    stateName: "South Carolina",
+    county: "Richland",
+    cities: ["Columbia", "Forest Acres"],
+    zips: ["29201", "29204", "29205", "29206", "29209", "29223"],
+    storeIds: ["4127", "4128", "2210"],
+    timezone: "America/New_York",
+    newsQueries: ['"Columbia" AND "South Carolina"', '"Richland County"'],
+    seasonalRisks: ["hurricane"],
+  },
+  {
+    id: "sc_lexington",
+    orgId: ORG_ID,
+    name: "Irmo / Lexington County, SC",
+    status: "active",
+    state: "SC",
+    stateName: "South Carolina",
+    county: "Lexington",
+    cities: ["Irmo", "Lexington"],
+    zips: ["29063", "29072", "29073"],
+    storeIds: ["3302"],
+    timezone: "America/New_York",
+    newsQueries: ['"Lexington County" AND "South Carolina"', 'Irmo OR "Lake Murray"'],
+    seasonalRisks: ["hurricane"],
+  },
+];
+const regionIdByStore = Object.fromEntries(regions.flatMap((r) => r.storeIds.map((s) => [s, r.id])));
 
 const stores = [
   { id: "4127", name: "Columbia Garners Ferry Rd Supercenter", type: "Supercenter", address: "Garners Ferry Rd", city: "Columbia", state: "SC", zip: "29209", county: "Richland", distributionCenter: "Regional grocery DC" },
   { id: "4128", name: "Columbia Forest Dr Neighborhood Market", type: "Neighborhood Market", address: "Forest Dr", city: "Forest Acres", state: "SC", zip: "29206", county: "Richland", distributionCenter: "Regional grocery DC" },
   { id: "3302", name: "Irmo Supercenter", type: "Supercenter", address: "Lake Murray Blvd", city: "Irmo", state: "SC", zip: "29063", county: "Lexington", distributionCenter: "Regional grocery DC" },
   { id: "2210", name: "Columbia Two Notch Rd Supercenter", type: "Supercenter", address: "Two Notch Rd", city: "Columbia", state: "SC", zip: "29223", county: "Richland", distributionCenter: "Regional grocery DC" },
-];
+].map((store) => ({ ...store, orgId: ORG_ID, regionId: regionIdByStore[store.id] }));
 const storeIdByName = Object.fromEntries(stores.map((s) => [s.name, s.id]));
 
 const customerExtras = {
@@ -566,6 +598,8 @@ function buildLocalEvents() {
       validFrom: at("2027-10-08T14:00:00-04:00"),
       validTo: at("2027-10-09T10:00:00-04:00"),
       county: "Richland",
+      orgId: ORG_ID,
+      regionId: "sc_richland",
       zips: ["29201", "29204", "29205", "29206", "29209", "29223"],
       severity: "warning",
       affectedProductIds: affected,
@@ -580,6 +614,9 @@ function buildLocalEvents() {
       validFrom: at("2027-10-05T18:00:00-04:00"),
       validTo: at("2027-10-07T06:00:00-04:00"),
       county: "Richland",
+      orgId: ORG_ID,
+      regionId: "sc_richland",
+      regionIds: ["sc_richland", "sc_lexington"],
       zips: ["29201", "29204", "29205", "29206", "29209", "29223", "29063"],
       severity: "high",
       affectedProductIds: ["milk", "bread", "eggs", "water"],
@@ -597,6 +634,8 @@ function buildLocalEvents() {
       validFrom: at("2027-10-08T14:00:00-04:00"),
       validTo: at("2027-10-09T10:00:00-04:00"),
       county: "Richland",
+      orgId: ORG_ID,
+      regionId: "sc_richland",
       zips: ["29209", "29206", "29223"],
       severity: "moderate",
       affectedProductIds: affected,
@@ -611,6 +650,8 @@ function buildLocalEvents() {
       validFrom: at("2027-10-08T00:00:00-04:00"),
       validTo: at("2027-10-08T23:59:00-04:00"),
       county: "Richland",
+      orgId: ORG_ID,
+      regionId: "sc_richland",
       zips: ["29209", "29206", "29223", "29204"],
       severity: "info",
       affectedProductIds: ["cocoa", "cereal", "pb", "bread"],
@@ -638,11 +679,29 @@ function buildStoreData() {
     }
   });
 
+  // Steady baseline sales for the wider catalog so replenish can size holiday / seasonal lines.
+  const seeded = new Set(["milk", "eggs", "water", ...Object.keys(baseline)]);
+  for (const product of products) {
+    if (seeded.has(product.id)) continue;
+    const base = defaultDailyUnits(product);
+    dates.forEach((date, i) => {
+      const units = Math.round(base * (i === 1 ? 1.08 : i === 2 ? 0.94 : 1));
+      dailySales.push({ id: `${date}_${product.id}`, date, productId: product.id, units, baselineUnits: base, revenue: round2(units * product.price) });
+    });
+  }
+
   const draft = getStoreOrder();
+  const draftIds = new Set(draft.lines.map((line) => line.id));
   const inventory = draft.lines.map((line) => {
     const rate = insights.daily[insights.daily.length - 1][line.id] ?? Math.round(line.forecast / 3);
     return { id: line.id, productId: line.id, onHand: line.onHand, dailyRate: rate, daysOfSupply: round2(line.onHand / rate), updatedAt: at("2027-10-07T06:00:00-04:00") };
   });
+  for (const product of products) {
+    if (draftIds.has(product.id)) continue;
+    const rate = baseline[product.id] ?? defaultDailyUnits(product);
+    const onHand = Math.round(rate * 2.5);
+    inventory.push({ id: product.id, productId: product.id, onHand, dailyRate: rate, daysOfSupply: round2(onHand / rate), updatedAt: at("2027-10-07T06:00:00-04:00") });
+  }
 
   const storeOrder = {
     id: draft.id,
@@ -672,13 +731,33 @@ function buildStoreData() {
   return { storeId, dailySales, inventory, storeOrder, insightNotes };
 }
 
+function defaultDailyUnits(product) {
+  if (product.shelf === "seasonal") return product.price > 10 ? 18 : 45;
+  return product.price > 10 ? 25 : 60;
+}
+
+/** Lighter inventory snapshot for the other seeded stores (smaller formats get less stock). */
+function buildOtherStoreInventory(store) {
+  const scale = store.type === "Neighborhood Market" ? 0.45 : 0.85;
+  return products.map((product) => {
+    const rate = Math.max(2, Math.round(defaultDailyUnits(product) * scale));
+    const onHand = Math.round(rate * 3);
+    return { id: product.id, productId: product.id, onHand, dailyRate: rate, daysOfSupply: round2(onHand / rate), updatedAt: at("2027-10-07T06:00:00-04:00") };
+  });
+}
+
 export function buildSeed() {
   const customers = buildCustomers();
   const docs = [];
   const put = (path, data) => docs.push({ path, data });
 
+  put(`orgs/${org.id}`, org);
+  for (const region of regions) put(`regions/${region.id}`, region);
   for (const product of products) put(`products/${product.id}`, product);
   for (const store of stores) put(`stores/${store.id}`, store);
+  for (const store of stores.filter((s) => s.id !== "4127")) {
+    for (const row of buildOtherStoreInventory(store)) put(`stores/${store.id}/inventory/${row.id}`, row);
+  }
   for (const customer of customers) put(`customers/${customer.id}`, customer);
 
   for (const { session, events, recs, order, summary } of built) {

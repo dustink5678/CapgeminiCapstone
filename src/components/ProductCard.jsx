@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { HeartIcon } from "./Icons";
 import Price from "./Price";
 import Spark from "./Spark";
@@ -34,7 +35,14 @@ export function WhyBox({ label, children }) {
   );
 }
 
-export default function ProductCard({ item, qty = 0, onAdd, onQty, variant = "outline", why, whyLabel }) {
+export default function ProductCard({ item, qty = 0, onAdd, onQty, variant = "outline", why, whyLabel, onView }) {
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (!onView || viewed.current) return;
+    viewed.current = true;
+    onView(item);
+  }, [item, onView]);
+
   return (
     <article className="pcard">
       <div className="pcard-media">
